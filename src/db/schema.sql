@@ -1,12 +1,9 @@
--- ====================================================================
--- ESQUEMA DE BASE DE DATOS POSTGRESQL - AVISAMULTAS JALISCO
--- ====================================================================
--- Reglas de integridad:
+-- Esquema de base de datos PostgreSQL - AvisaMultas Jalisco
+-- Integridad referencial:
 -- 1. FOREIGN KEYS con ON DELETE RESTRICT para proteger datos históricos.
--- 2. NUMERIC(12, 2) para importes monetarios (evitar floats).
+-- 2. NUMERIC(12, 2) para importes monetarios.
 -- 3. Restricciones UNIQUE compuestas para deduplicación estricta.
 -- 4. Soporte multivariado de fuentes de identificador.
--- ====================================================================
 
 -- 1. TABLA DE USUARIOS (Clientes y Titulares de Mandato)
 CREATE TABLE IF NOT EXISTS usuarios (
@@ -136,13 +133,9 @@ CREATE TABLE IF NOT EXISTS auditoria (
 
 CREATE INDEX IF NOT EXISTS idx_auditoria_timestamp ON auditoria(timestamp DESC);
 
--- ====================================================================
--- 8. POLÍTICAS DE SEGURIDAD Y PROTECCIÓN DE DATOS (RLS)
--- ====================================================================
--- Avisamultas Jalisco opera exclusivamente con acceso backend autenticado
--- mediante conexión directa (DATABASE_URL con rol postgres/service_role).
--- Las tablas NUNCA deben exponerse directamente a clientes anónimos ('anon')
--- ni a usuarios autenticados directos de Supabase ('authenticated').
+-- Políticas de seguridad y protección de datos (RLS)
+-- Acceso exclusivo desde backend mediante service_role / conexión directa.
+-- Tablas bloqueadas para clientes anónimos y autenticados vía cliente directo.
 
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehiculos ENABLE ROW LEVEL SECURITY;

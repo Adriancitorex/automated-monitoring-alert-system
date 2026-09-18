@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
-import { getRepositories, obtenerEstadoConexion } from './src/db/repositoriesFactory';
+import { obtenerRepositorios, obtenerEstadoConexion } from './src/db/repositoriesFactory';
 import { InfraccionCanonica } from './src/domain/types';
 
 dotenv.config();
@@ -13,10 +13,7 @@ const APP_VERSION = '1.0.0';
 
 app.use(express.json());
 
-// ==========================================
-// SERVICIO DE NOTIFICACIONES WHATSAPP
-// ==========================================
-class WhatsAppService {
+class ServicioWhatsApp {
   static async enviarAlertaMulta(
     telefono: string,
     placa: string,
@@ -58,36 +55,25 @@ class WhatsAppService {
       }
     }
 
-    // Modo simulado para pruebas de desarrollo cuando no hay tokens en el entorno
     const mockId = `sim_wamid_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     return { exito: true, msgId: mockId };
   }
 }
 
-// ==========================================
-// ENDPOINTS PÚBLICOS DEL SAAS
-// ==========================================
+const WhatsAppService = ServicioWhatsApp;
 
-/**
- * 2 & 9. HEALTH CHECK EXPLICITO
- * Informa:
- * - modo actual (DEMO_MEMORY | POSTGRESQL)
- * - estado de PostgreSQL (POSTGRESQL_CONNECTED | POSTGRESQL_UNAVAILABLE | DEMO_MEMORY)
- * - cantidad de vehículos
- * - versión de aplicación
- * Sin exponer secretos ni DATABASE_URL.
- */
+// Verificación de estado del servicio y capa de persistencia
 app.get('/api/health', async (req, res) => {
   try {
     const estadoConexion = await obtenerEstadoConexion();
-    const repos = await getRepositories();
+    const repos = await obtenerRepositorios();
 
     let cantidadVehiculos = 0;
     try {
       const vehiculos = await repos.vehiculos.listarTodos();
       cantidadVehiculos = vehiculos.length;
     } catch {
-      // Si la base está inaccesible
+      // Base no disponible para lectura de métricas
     }
 
     const esSaludable = estadoConexion.estado !== 'POSTGRESQL_UNAVAILABLE';
@@ -112,25 +98,21 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-/**
- * 4. ONBOARDING TRANSACCIONAL ATÓMICO (MANDATO EXPRESO)
- * Ejecuta usuario + vehículo + suscripción en una sola transacción atómica.
- * Si falla algo, revierte todo para evitar huérfanos.
- */
+// Registro inicial atómico de usuario, vehículo y suscripción
 app.post('/api/onboarding', async (req, res) => {
   try {
     const { nombre, email, telefonoWhatsApp, placa, numeroSerie5, alias, plan } = req.body;
 
     if (!nombre || !email || !telefonoWhatsApp || !placa || !numeroSerie5) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios para el registro.' });
+      return res.status(400).json({ error: 'Faltan campos obligatorios: nombre, email, telefonoWhatsApp, placa, numeroSerie5.' });
     }
 
     if (numeroSerie5.trim().length !== 5) {
-      return res.status(400).json({ error: 'Debes proporcionar exactamente los últimos 5 dígitos del número de serie (VIN).' });
+      return res.status(400).json({ error: 'El número de serie debe contener exactamente 5 caracteres.' });
     }
 
     const ipOrigen = req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
-    const repos = await getRepositories();
+    const repos = await obtenerRepositorios();
 
     const resultado = await repos.ejecutarOnboardingTransaccional({
       nombre: nombre.trim(),
@@ -143,7 +125,6 @@ app.post('/api/onboarding', async (req, res) => {
       ipOrigen
     });
 
-    // PRIVACIDAD (Punto 8): No devolver número de serie ni IP en la respuesta
     const vehiculoPrivado = {
       id: resultado.vehiculo.id,
       placa: resultado.vehiculo.placa,
@@ -156,7 +137,7 @@ app.post('/api/onboarding', async (req, res) => {
 
     res.json({
       exito: true,
-      mensaje: 'Vehículo registrado y servicio activado con éxito.',
+      mensaje: 'Vehículo registrado y servicio activado exitosamente.',
       usuario: {
         id: resultado.usuario.id,
         nombre: resultado.usuario.nombre,
@@ -175,30 +156,26 @@ app.post('/api/onboarding', async (req, res) => {
       return res.status(409).json({ error: err.message });
     }
     if (err.message?.includes('POSTGRESQL_UNAVAILABLE')) {
-      return res.status(503).json({ error: 'Infraestructura no disponible temporalmente. Intente más tarde.' });
+      return res.status(503).json({ error: 'Base de datos temporalmente no disponible.' });
     }
-    res.status(500).json({ error: err.message || 'Error durante el onboarding' });
+    res.status(500).json({ error: err.message || 'Error en proceso de onboarding.' });
   }
 });
 
-/**
- * 8. PRIVACIDAD - CONSULTA DE ESTADO POR PLACA (PORTAL DEL CLIENTE)
- * Regla: No devolver innecesariamente número de serie, teléfono, IP ni consentimiento.
- */
+// Consulta de estado vehicular para el conductor (datos sanitizados)
 app.get('/api/vehiculo/estado/:placa', async (req, res) => {
   try {
     const placa = req.params.placa.toUpperCase().trim();
-    const repos = await getRepositories();
+    const repos = await obtenerRepositorios();
 
     const vehiculo = await repos.vehiculos.obtenerPorPlaca(placa);
     if (!vehiculo) {
-      return res.status(404).json({ error: 'Vehículo no registrado en el sistema.' });
+      return res.status(404).json({ error: 'Vehículo no encontrado.' });
     }
 
     const usuario = await repos.usuarios.obtenerPorId(vehiculo.usuarioId);
     const multas = await repos.infracciones.listarPorVehiculoId(vehiculo.id);
 
-    // FILTRO DE PRIVACIDAD: Sanitización estricta para endpoint de cliente
     res.json({
       vehiculo: {
         id: vehiculo.id,
@@ -209,11 +186,9 @@ app.get('/api/vehiculo/estado/:placa', async (req, res) => {
         ultimaRevisionEn: vehiculo.ultimaRevisionEn,
         proximaRevisionEstimadaEn: vehiculo.proximaRevisionEstimadaEn,
         totalMultasRegistradas: vehiculo.totalMultasRegistradas
-        // NOTA DE PRIVACIDAD: numeroSerie5 está intencionalmente OMITIDO aquí
       },
       usuario: {
         nombre: usuario?.nombre || 'Titular'
-        // NOTA DE PRIVACIDAD: telefonoWhatsApp y email están intencionalmente OMITIDOS aquí
       },
       multas: multas.map((m) => ({
         id: m.idInterno,
@@ -237,31 +212,30 @@ app.get('/api/vehiculo/estado/:placa', async (req, res) => {
   }
 });
 
-// ==========================================
-// PANEL ADMINISTRATIVO PRIVADO (SOLO TÚ)
-// ==========================================
-
-const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+// Middleware de autorización para operaciones de administración
+const requerirAutenticacionAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const adminSecret = process.env.ADMIN_SECRET_KEY;
   const claveRecibida = req.headers['x-admin-key'];
 
   if (!adminSecret || adminSecret.trim() === '') {
     return res.status(503).json({
-      error: 'Acceso deshabilitado: La variable ADMIN_SECRET_KEY no está configurada en el entorno del servidor.'
+      error: 'ADMIN_SECRET_KEY no configurada en el entorno.'
     });
   }
 
   if (claveRecibida !== adminSecret) {
-    return res.status(401).json({ error: 'Clave de administración incorrecta.' });
+    return res.status(401).json({ error: 'Clave de administración inválida.' });
   }
 
   next();
 };
 
-// 1. Obtener datos del panel administrativo (Acceso completo autorizado)
-app.get('/api/admin/datos', requireAdminAuth, async (req, res) => {
+const requireAdminAuth = requerirAutenticacionAdmin;
+
+// Consulta consolidada para panel de administración
+app.get('/api/admin/datos', requerirAutenticacionAdmin, async (req, res) => {
   try {
-    const repos = await getRepositories();
+    const repos = await obtenerRepositorios();
 
     const [usuarios, vehiculos, infracciones, notificaciones, revisiones] = await Promise.all([
       repos.usuarios.listarTodos(),
@@ -271,7 +245,6 @@ app.get('/api/admin/datos', requireAdminAuth, async (req, res) => {
       repos.revisiones.listarRecientes(50)
     ]);
 
-    // Adaptador de formato para compatibilidad con vistas de frontend existentes
     const multasFormateadas = infracciones.map((m) => ({
       id: m.idInterno,
       vehiculoId: m.vehiculoId,
@@ -314,8 +287,8 @@ app.get('/api/admin/datos', requireAdminAuth, async (req, res) => {
   }
 });
 
-// 2. Registrar Revisión Manual de un Vehículo
-app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => {
+// Registro de verificación periódica o hallazgo de infracción
+app.post('/api/admin/registrar-revision', requerirAutenticacionAdmin, async (req, res) => {
   try {
     const {
       vehiculoId,
@@ -331,7 +304,7 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
       observaciones
     } = req.body;
 
-    const repos = await getRepositories();
+    const repos = await obtenerRepositorios();
     const vehiculo = await repos.vehiculos.obtenerPorId(vehiculoId);
 
     if (!vehiculo) {
@@ -342,13 +315,12 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
     const proximaEstimada = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
     await repos.vehiculos.actualizarRevision(vehiculo.id, fechaRevisionActual, proximaEstimada);
 
-    // Caso A: No se encontró infracción en el portal oficial
     if (!huboInfraccion) {
       await repos.revisiones.crear({
         vehiculoId: vehiculo.id,
         placa: vehiculo.placa,
         resultado: 'SIN_INFRACCIONES',
-        observaciones: observaciones || 'Consulta manual en portal oficial de Jalisco sin adeudos pendientes.'
+        observaciones: observaciones || 'Consulta manual en portal oficial sin adeudos pendientes.'
       });
 
       await repos.auditoria.registrar({
@@ -360,14 +332,13 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
 
       return res.json({
         exito: true,
-        mensaje: `Revisión registrada para ${vehiculo.placa}. Vehículo al corriente sin infracciones.`
+        mensaje: `Revisión registrada para ${vehiculo.placa}. Vehículo al corriente.`
       });
     }
 
-    // Caso B: Infracción detectada
     if (!folioOficial || !fechaInfraccion || !motivoInfraccion || !montoOficial) {
       return res.status(400).json({
-        error: 'Para registrar una infracción debes capturar folio, fecha, motivo y monto oficial.'
+        error: 'Campos requeridos: folioOficial, fechaInfraccion, motivoInfraccion, montoOficial.'
       });
     }
 
@@ -378,9 +349,6 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
     const porcentajeDesc = tieneDescuento ? Number(porcentajeDescuento) || 50 : 0;
     const montoConDescuento = tieneDescuento ? montoNum * (1 - porcentajeDesc / 100) : montoNum;
 
-    // 7. DEDUPLICACIÓN MULTIVARIADA DE EXTREMO A EXTREMO
-    // Se delega al repositorio, que verifica (vehiculo_id, fuente_identificador, identificador_externo)
-    // y también comprueba hecho material.
     const idInfraccion = `mul-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
     const nuevaInfraccion: InfraccionCanonica = {
@@ -418,7 +386,7 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
           detalles: { folio: folioLimpio, fuente: namespaceFuente, motivo: err.message }
         });
         return res.status(409).json({
-          error: `La infracción con folio ${folioLimpio} bajo la fuente ${namespaceFuente} ya estaba registrada en el sistema. Se evitó duplicidad.`
+          error: `Infracción con folio ${folioLimpio} en fuente ${namespaceFuente} ya registrada. Operación omitida por duplicidad.`
         });
       }
       throw err;
@@ -426,7 +394,6 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
 
     await repos.vehiculos.incrementarTotalMultas(vehiculo.id);
 
-    // Disparar Notificación WhatsApp
     const usuario = await repos.usuarios.obtenerPorId(vehiculo.usuarioId);
     let resultadoEnvio: { exito: boolean; msgId: string; error?: string } = {
       exito: false,
@@ -435,7 +402,7 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
     };
 
     if (usuario) {
-      resultadoEnvio = await WhatsAppService.enviarAlertaMulta(
+      resultadoEnvio = await ServicioWhatsApp.enviarAlertaMulta(
         usuario.telefonoWhatsApp,
         vehiculo.placa,
         vehiculo.alias || vehiculo.placa,
@@ -461,7 +428,7 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
       vehiculoId: vehiculo.id,
       placa: vehiculo.placa,
       resultado: 'NUEVA_INFRACCION_REGISTRADA',
-      observaciones: `Infracción ${folioLimpio} [${namespaceFuente}] registrada. Alerta WhatsApp ${resultadoEnvio.exito ? 'enviada' : 'falló'}. ${observaciones || ''}`
+      observaciones: `Infracción ${folioLimpio} [${namespaceFuente}] registrada. Alerta WhatsApp: ${resultadoEnvio.exito ? 'enviada' : 'fallida'}. ${observaciones || ''}`
     });
 
     await repos.auditoria.registrar({
@@ -479,7 +446,7 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
 
     res.json({
       exito: true,
-      mensaje: `Infracción ${folioLimpio} registrada con éxito. Notificación enviada a ${usuario?.telefonoWhatsApp}.`,
+      mensaje: `Infracción ${folioLimpio} registrada. Notificación a ${usuario?.telefonoWhatsApp}.`,
       multa: nuevaInfraccion,
       notificacionWhatsApp: resultadoEnvio
     });
@@ -488,15 +455,15 @@ app.post('/api/admin/registrar-revision', requireAdminAuth, async (req, res) => 
   }
 });
 
-// 3. Eliminar Vehículo y sus dependencias (Panel Administrativo)
-app.delete('/api/admin/vehiculo/:placa', requireAdminAuth, async (req, res) => {
+// Eliminación de vehículo y registros asociados
+app.delete('/api/admin/vehiculo/:placa', requerirAutenticacionAdmin, async (req, res) => {
   try {
     const placa = req.params.placa;
     if (!placa) {
-      return res.status(400).json({ error: 'Debes proporcionar la placa a eliminar.' });
+      return res.status(400).json({ error: 'Placa requerida.' });
     }
 
-    const repos = await getRepositories();
+    const repos = await obtenerRepositorios();
     const eliminado = await repos.eliminarVehiculoPorPlaca(placa);
 
     if (!eliminado) {
@@ -505,26 +472,23 @@ app.delete('/api/admin/vehiculo/:placa', requireAdminAuth, async (req, res) => {
 
     res.json({
       exito: true,
-      mensaje: `Vehículo ${placa.toUpperCase()} y todos sus registros asociados fueron eliminados correctamente.`
+      mensaje: `Vehículo ${placa.toUpperCase()} y registros dependientes eliminados.`
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al eliminar vehículo.' });
   }
 });
 
-// 4. Reinicio de Datos Demo (Protegido en Producción)
-app.post('/api/admin/reset-demo', requireAdminAuth, async (req, res) => {
+// Restablecimiento de datos de demostración
+app.post('/api/admin/reset-demo', requerirAutenticacionAdmin, async (req, res) => {
   try {
-    const repos = await getRepositories();
+    const repos = await obtenerRepositorios();
 
-    // PROTECCIÓN DE SEGURIDAD ESTRICTA:
-    // En producción (cuando opera contra PostgreSQL real), resetear los datos borraría clientes reales
-    // que están pagando. Por tanto, está estrictamente denegado a menos que se defina ALLOW_DEMO_RESET=true.
     if (repos.modo === 'POSTGRESQL') {
       const resetPermitido = process.env.ALLOW_DEMO_RESET === 'true';
       if (!resetPermitido) {
         return res.status(403).json({
-          error: 'Operación denegada en producción: El reinicio de datos en PostgreSQL está desactivado por seguridad para proteger a los usuarios reales. Para habilitarlo en entornos de pruebas, define ALLOW_DEMO_RESET=true en las variables de entorno del servidor.'
+          error: 'Reinicio denegado en producción. Requiere ALLOW_DEMO_RESET=true.'
         });
       }
     }
@@ -533,34 +497,24 @@ app.post('/api/admin/reset-demo', requireAdminAuth, async (req, res) => {
 
     res.json({
       exito: true,
-      mensaje: `Datos ${repos.modo === 'POSTGRESQL' ? 'de PostgreSQL' : 'en memoria'} reiniciados exitosamente.`
+      mensaje: `Datos ${repos.modo === 'POSTGRESQL' ? 'de PostgreSQL' : 'en memoria'} reiniciados.`
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error al reiniciar datos.' });
   }
 });
 
-// ==========================================
-// VITE MIDDLEWARE Y ARRANQUE
-// ==========================================
 async function startServer() {
   const estadoConexion = await obtenerEstadoConexion();
 
-  console.log('====================================================');
-  console.log('       AVISAMULTAS JALISCO - MOTOR DE PERSISTENCIA  ');
-  console.log('====================================================');
   if (estadoConexion.estado === 'POSTGRESQL_CONNECTED') {
-    console.log('🟢 MODO ACTIVO: POSTGRESQL (Base de datos remota conectada)');
-    console.log(`📡 DETALLES: ${estadoConexion.detalles}`);
+    console.log(`[db] Modo activo: PostgreSQL. ${estadoConexion.detalles}`);
   } else if (estadoConexion.estado === 'POSTGRESQL_UNAVAILABLE') {
-    console.log('🔴 MODO ACTIVO: POSTGRESQL CONFIGURADO PERO NO ACCESIBLE');
-    console.log(`⚠️ ERROR: ${estadoConexion.error || estadoConexion.detalles}`);
-    console.log('🚫 REGLA DE ORO: Fallback a memoria BLOQUEADO para proteger la integridad.');
+    console.error(`[db] PostgreSQL configurado pero no accesible: ${estadoConexion.error || estadoConexion.detalles}`);
+    console.error('[db] Fallback a memoria bloqueado por consistencia de datos.');
   } else {
-    console.log('🟡 MODO ACTIVO: DEMO_MEMORY (Almacenamiento volátil en memoria)');
-    console.log('ℹ️ DATABASE_URL no configurada. Operando en memoria para desarrollo local.');
+    console.log('[db] Modo activo: Memoria volátil. DATABASE_URL no configurada.');
   }
-  console.log('====================================================');
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -577,7 +531,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`AvisaMultas Jalisco activo en http://0.0.0.0:${PORT}`);
+    console.log(`AvisaMultas Jalisco en servicio: http://0.0.0.0:${PORT}`);
   });
 }
 

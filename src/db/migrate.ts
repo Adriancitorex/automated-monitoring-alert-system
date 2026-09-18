@@ -1,62 +1,53 @@
-/**
- * SCRIPT DE MIGRACIÓN - AVISAMULTAS JALISCO
- * 
- * Ejecuta src/db/schema.sql en la base de datos PostgreSQL apuntada por DATABASE_URL.
- * Uso: npx tsx src/db/migrate.ts
- */
-
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import { initPool, closePool, checkPostgresHealth } from './postgres/pool';
+import { inicializarPool, cerrarPool, verificarSaludPostgres } from './postgres/pool';
 
 dotenv.config();
 
-async function runMigrations() {
-  console.log('--- AVISAMULTAS JALISCO: EJECUCIÓN DE MIGRACIONES ---');
+async function ejecutarMigraciones() {
   const databaseUrl = process.env.DATABASE_URL;
 
   if (!databaseUrl || databaseUrl.trim() === '') {
-    console.error('❌ ERROR: DATABASE_URL no está configurada. No se pueden ejecutar migraciones.');
+    console.error('[migracion] Error: DATABASE_URL no configurada.');
     process.exit(1);
   }
 
-  const health = await checkPostgresHealth();
+  const health = await verificarSaludPostgres();
   if (!health.conectado) {
-    console.error(`❌ ERROR: No se pudo conectar a PostgreSQL: ${health.error}`);
+    console.error(`[migracion] Error de conexión: ${health.error}`);
     process.exit(1);
   }
 
-  console.log(`✅ Conexión establecida con PostgreSQL (${health.latenciaMs}ms). Leyendo schema.sql...`);
+  console.log(`[migracion] Conexión establecida (${health.latenciaMs}ms). Aplicando schema.sql...`);
 
   const schemaPath = path.join(process.cwd(), 'src', 'db', 'schema.sql');
   const sql = fs.readFileSync(schemaPath, 'utf8');
 
-  const pool = initPool();
+  const pool = inicializarPool();
   const client = await pool.connect();
 
   try {
-    console.log('Iniciando ejecución de sentencias DDL...');
     await client.query('BEGIN');
     await client.query(sql);
     await client.query('COMMIT');
-    console.log('✅ Migraciones aplicadas con éxito.');
+    console.log('[migracion] Esquema aplicado exitosamente.');
   } catch (err: any) {
     await client.query('ROLLBACK');
-    console.error('❌ Error ejecutando migraciones. Transacción revertida:', err.message);
+    console.error(`[migracion] Error en sentencias DDL. Transacción revertida: ${err.message}`);
     process.exit(1);
   } finally {
     client.release();
-    await closePool();
+    await cerrarPool();
   }
 }
 
-// Ejecución directa si se invoca como script
 if (process.argv[1]?.endsWith('migrate.ts')) {
-  runMigrations().catch((err) => {
-    console.error('Fallo no controlado en migración:', err);
+  ejecutarMigraciones().catch((err) => {
+    console.error('[migracion] Fallo no controlado:', err);
     process.exit(1);
   });
 }
 
-export { runMigrations };
+export { ejecutarMigraciones };
+export const runMigrations = ejecutarMigraciones;

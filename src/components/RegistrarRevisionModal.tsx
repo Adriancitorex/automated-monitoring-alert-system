@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CheckCircle, AlertTriangle, ExternalLink, Calendar, DollarSign, FileText, Send } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, ExternalLink, Calendar, DollarSign, FileText, Send, ShieldCheck } from 'lucide-react';
 
 interface RegistrarRevisionModalProps {
   isOpen: boolean;
@@ -61,7 +61,6 @@ export const RegistrarRevisionModal: React.FC<RegistrarRevisionModalProps> = ({
         throw new Error(data.error || 'Error al registrar la revisión.');
       }
 
-      alert(data.mensaje);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -72,96 +71,122 @@ export const RegistrarRevisionModal: React.FC<RegistrarRevisionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F2A4A]/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white rounded-md border border-[#E2E5E8] w-full max-w-xl overflow-hidden shadow-lg text-left">
         
-        {/* Cabecera */}
-        <div className="bg-slate-900 text-white p-6 relative">
+        {/* Cabecera Institucional */}
+        <div className="bg-[#0F2A4A] text-white p-5 sm:p-6 relative">
           <button
+            type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+            aria-label="Cerrar modal"
+            className="absolute right-4 top-4 p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
           
-          <span className="text-[10px] font-mono tracking-widest uppercase text-amber-400 font-bold">
-            Operación Manual • Portal Oficial SHP Jalisco
-          </span>
-          <h3 className="text-lg font-black mt-1">Registrar Revisión de Vehículo</h3>
-          <div className="flex items-center gap-3 mt-2 text-xs text-slate-300">
-            <span className="font-mono bg-slate-800 px-2 py-0.5 rounded-md font-bold text-amber-300">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center text-white shrink-0">
+              <ShieldCheck className="w-4 h-4" strokeWidth={2} />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-slate-300">
+                Inspección Asistida • Portal SHP Jalisco
+              </span>
+              <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
+                Registrar Resultado de Revisión
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/15 text-xs text-slate-200">
+            <span className="font-mono bg-white/15 px-2 py-0.5 rounded font-bold text-white">
               Placa: {vehiculo.placa}
             </span>
-            <span>Serie: *{vehiculo.numeroSerie5}</span>
-            <span className="text-slate-400">({vehiculo.alias || 'Sin alias'})</span>
+            <span className="font-mono text-slate-300">Serie: *{vehiculo.numeroSerie5}</span>
+            {vehiculo.alias && (
+              <span className="text-slate-400">({vehiculo.alias})</span>
+            )}
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 text-xs">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl font-medium">
+            <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] text-[#991B1B] rounded font-medium">
               {error}
             </div>
           )}
 
           {/* Enlace directo para abrir el portal oficial y cotejar */}
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between">
-            <div className="text-amber-900 leading-snug">
-              <strong>Paso previo:</strong> Abre el portal oficial de Jalisco e ingresa la placa <strong>{vehiculo.placa}</strong> y serie <strong>{vehiculo.numeroSerie5}</strong>.
+          <div className="p-3 bg-[#F0F4F8] border border-[#D5DCE4] rounded flex items-center justify-between">
+            <div className="text-[#0F2A4A] leading-relaxed pr-2">
+              <strong>Procedimiento:</strong> Abre el portal oficial de la Secretaría de la Hacienda Pública e ingresa la placa <strong>{vehiculo.placa}</strong> y serie <strong>{vehiculo.numeroSerie5}</strong>.
             </div>
             <a
               href="https://gobiernoenlinea1.jalisco.gob.mx/serviciosVehiculares/adeudos"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 bg-slate-900 text-white font-bold rounded-xl flex items-center gap-1 shrink-0 ml-2 hover:bg-slate-800"
+              className="px-3 py-1.5 bg-[#0F2A4A] text-white font-semibold rounded flex items-center gap-1.5 shrink-0 hover:bg-[#163B66] transition-colors"
             >
               Abrir Portal <ExternalLink className="w-3 h-3" />
             </a>
           </div>
 
           {/* Selector de resultado de la consulta */}
-          <div className="space-y-2">
-            <label className="block font-bold text-slate-700 uppercase">
-              Resultado de la Consulta en el Portal
+          <div className="space-y-1.5">
+            <label className="block font-semibold text-[#111827]">
+              Resultado del Cotejo Oficial
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setHuboInfraccion(false)}
-                className={`p-3 rounded-xl border text-center font-bold transition-all ${
+                className={`p-3 rounded border text-left font-semibold transition-colors ${
                   !huboInfraccion
-                    ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-600/30'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'border-[#166534] bg-[#F0FDF4] text-[#166534]'
+                    : 'border-[#E2E5E8] text-[#4B5563] bg-white hover:border-[#CBD5E1]'
                 }`}
               >
-                ✓ Sin Infracciones (Al corriente)
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-[#166534] shrink-0" />
+                  <span>Sin Infracciones</span>
+                </div>
+                <div className="text-[11px] font-normal text-[#4B5563] mt-1">
+                  Vehículo al corriente en el portal oficial.
+                </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setHuboInfraccion(true)}
-                className={`p-3 rounded-xl border text-center font-bold transition-all ${
+                className={`p-3 rounded border text-left font-semibold transition-colors ${
                   huboInfraccion
-                    ? 'border-amber-600 bg-amber-50 text-amber-900 ring-2 ring-amber-600/30'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'border-[#991B1B] bg-[#FEF2F2] text-[#991B1B]'
+                    : 'border-[#E2E5E8] text-[#4B5563] bg-white hover:border-[#CBD5E1]'
                 }`}
               >
-                ⚠️ Nueva Infracción Localizada
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-[#991B1B] shrink-0" />
+                  <span>Infracción Detectada</span>
+                </div>
+                <div className="text-[11px] font-normal text-[#4B5563] mt-1">
+                  Registrar folio y activar deduplicación.
+                </div>
               </button>
             </div>
           </div>
 
           {/* Campos adicionales si se encontró una infracción */}
           {huboInfraccion && (
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-              <div className="font-bold text-slate-800 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-200">
-                Datos de la Infracción en el Portal
+            <div className="p-4 bg-[#F8F9FA] rounded border border-[#E2E5E8] space-y-3">
+              <div className="font-bold text-[#111827] text-xs pb-1.5 border-b border-[#E2E5E8]">
+                Datos de la Infracción Localizada
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    Folio Oficial
+                  <label className="block font-semibold text-[#111827] mb-1">
+                    Folio Oficial *
                   </label>
                   <input
                     type="text"
@@ -169,42 +194,42 @@ export const RegistrarRevisionModal: React.FC<RegistrarRevisionModalProps> = ({
                     placeholder="Ej. FOL-JAL-84920"
                     value={folioOficial}
                     onChange={(e) => setFolioOficial(e.target.value.toUpperCase())}
-                    className="w-full text-xs font-mono border border-slate-300 rounded-xl p-2.5 bg-white"
+                    className="w-full text-xs font-mono border border-[#D5DCE4] rounded p-2 bg-white focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    Fecha de la Infracción
+                  <label className="block font-semibold text-[#111827] mb-1">
+                    Fecha de la Infracción *
                   </label>
                   <input
                     type="date"
                     required
                     value={fechaInfraccion}
                     onChange={(e) => setFechaInfraccion(e.target.value)}
-                    className="w-full text-xs border border-slate-300 rounded-xl p-2.5 bg-white"
+                    className="w-full text-xs border border-[#D5DCE4] rounded p-2 bg-white focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">
-                  Motivo / Concepto Oficial
+                <label className="block font-semibold text-[#111827] mb-1">
+                  Motivo o Concepto Oficial *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Exceso de velocidad detectado por cinemómetro en López Mateos"
+                  placeholder="Ej. Exceso de velocidad detectado por cinemómetro en Av. López Mateos"
                   value={motivoInfraccion}
                   onChange={(e) => setMotivoInfraccion(e.target.value)}
-                  className="w-full text-xs border border-slate-300 rounded-xl p-2.5 bg-white"
+                  className="w-full text-xs border border-[#D5DCE4] rounded p-2 bg-white focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    Monto Oficial ($ MXN)
+                  <label className="block font-semibold text-[#111827] mb-1">
+                    Importe Oficial ($ MXN) *
                   </label>
                   <input
                     type="number"
@@ -212,48 +237,48 @@ export const RegistrarRevisionModal: React.FC<RegistrarRevisionModalProps> = ({
                     required
                     value={montoOficial}
                     onChange={(e) => setMontoOficial(e.target.value)}
-                    className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl p-2.5 bg-white"
+                    className="w-full text-xs font-mono font-bold border border-[#D5DCE4] rounded p-2 bg-white focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
+                  <label className="block font-semibold text-[#111827] mb-1">
                     ¿Aplica Descuento Pronto Pago?
                   </label>
                   <select
                     value={tieneDescuento ? 'si' : 'no'}
                     onChange={(e) => setTieneDescuento(e.target.value === 'si')}
-                    className="w-full text-xs border border-slate-300 rounded-xl p-2.5 bg-white font-medium"
+                    className="w-full text-xs border border-[#D5DCE4] rounded p-2 bg-white font-medium focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
                   >
                     <option value="si">Sí (Aplica pronto pago)</option>
-                    <option value="no">No (Monto neto)</option>
+                    <option value="no">No (Importe neto regular)</option>
                   </select>
                 </div>
               </div>
 
               {tieneDescuento && (
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#E2E5E8]">
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">
-                      % Descuento
+                    <label className="block font-semibold text-[#111827] mb-1">
+                      % Descuento Otorgado
                     </label>
                     <input
                       type="number"
                       value={porcentajeDescuento}
                       onChange={(e) => setPorcentajeDescuento(e.target.value)}
-                      className="w-full text-xs font-mono border border-slate-300 rounded-xl p-2.5 bg-white"
+                      className="w-full text-xs font-mono border border-[#D5DCE4] rounded p-2 bg-white focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">
+                    <label className="block font-semibold text-[#111827] mb-1">
                       Fecha Límite Estimada
                     </label>
                     <input
                       type="date"
                       value={fechaLimiteDescuento}
                       onChange={(e) => setFechaLimiteDescuento(e.target.value)}
-                      className="w-full text-xs border border-slate-300 rounded-xl p-2.5 bg-white"
+                      className="w-full text-xs border border-[#D5DCE4] rounded p-2 bg-white focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
                     />
                   </div>
                 </div>
@@ -262,32 +287,36 @@ export const RegistrarRevisionModal: React.FC<RegistrarRevisionModalProps> = ({
           )}
 
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">
-              Observaciones de la Revisión (Opcional)
+            <label className="block font-semibold text-[#111827] mb-1">
+              Observaciones del Cotejo (Opcional)
             </label>
             <input
               type="text"
-              placeholder="Ej. Revisado a las 12:00 hrs. Todo en orden."
+              placeholder="Ej. Cotejado a las 10:30 hrs. Adeudo no refleja todavía pago en OXXO."
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
-              className="w-full text-xs border border-slate-300 rounded-xl p-2.5"
+              className="w-full text-xs border border-[#D5DCE4] rounded p-2 bg-[#F8F9FA] focus:outline-hidden focus:border-[#0F2A4A] focus:ring-1 focus:ring-[#0F2A4A]"
             />
           </div>
 
-          <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <div className="pt-3 border-t border-[#E2E5E8] flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-3.5 py-1.5 text-xs font-semibold text-[#4B5563] hover:text-[#111827] rounded transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={cargando}
-              className="px-5 py-2 text-xs font-black uppercase tracking-wider text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-[#0F2A4A] hover:bg-[#163B66] rounded transition-colors disabled:opacity-50"
             >
-              {cargando ? 'Guardando...' : huboInfraccion ? 'Guardar y Alertar por WhatsApp' : 'Guardar Revisión Sin Adeudos'}
+              {cargando 
+                ? 'Registrando...' 
+                : huboInfraccion 
+                  ? 'Guardar y Alertar por WhatsApp' 
+                  : 'Registrar Vehículo al Corriente'}
             </button>
           </div>
         </form>
@@ -296,3 +325,4 @@ export const RegistrarRevisionModal: React.FC<RegistrarRevisionModalProps> = ({
     </div>
   );
 };
+

@@ -1,15 +1,8 @@
-/**
- * POOL DE CONEXIONES POSTGRESQL - AVISAMULTAS JALISCO
- * 
- * Gestiona el ciclo de vida del Pool de node-postgres (pg).
- * Incluye comprobación explícita con `SELECT 1` y soporte de transacciones seguras.
- */
-
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
 let pool: Pool | null = null;
 
-export function getPostgresConfig() {
+export function obtenerConfiguracionPostgres() {
   const databaseUrl = process.env.DATABASE_URL;
   return {
     databaseUrl: databaseUrl?.trim() || null,
@@ -17,16 +10,15 @@ export function getPostgresConfig() {
   };
 }
 
-export function initPool(): Pool {
+export function inicializarPool(): Pool {
   if (pool) return pool;
 
-  const { databaseUrl, tieneConfiguracion } = getPostgresConfig();
+  const { databaseUrl, tieneConfiguracion } = obtenerConfiguracionPostgres();
 
   if (!tieneConfiguracion || !databaseUrl) {
-    throw new Error('No se puede inicializar el pool de PostgreSQL: DATABASE_URL no está configurada en el entorno.');
+    throw new Error('DATABASE_URL no configurada en el entorno');
   }
 
-  // Configuración dinámica de SSL para bases de datos administradas (Supabase, Neon, AWS RDS, Cloud SQL, etc.)
   let sslConfig: any = undefined;
   const sslExplicit = process.env.DATABASE_SSL?.toLowerCase().trim();
   const urlHasSsl = databaseUrl.includes('sslmode=require') || databaseUrl.includes('ssl=true');
@@ -47,29 +39,26 @@ export function initPool(): Pool {
   });
 
   pool.on('error', (err) => {
-    console.error('Error imprevisto en cliente inactivo del pool de PostgreSQL:', err.message);
+    console.error('Error imprevisto en cliente inactivo del pool:', err.message);
   });
 
   return pool;
 }
 
-export async function closePool(): Promise<void> {
+export async function cerrarPool(): Promise<void> {
   if (pool) {
     await pool.end();
     pool = null;
   }
 }
 
-/**
- * Comprobación explícita de salud ejecutando SELECT 1
- */
-export async function checkPostgresHealth(): Promise<{ conectado: boolean; latenciaMs?: number; error?: string }> {
-  const { tieneConfiguracion } = getPostgresConfig();
+export async function verificarSaludPostgres(): Promise<{ conectado: boolean; latenciaMs?: number; error?: string }> {
+  const { tieneConfiguracion } = obtenerConfiguracionPostgres();
   if (!tieneConfiguracion) {
     return { conectado: false, error: 'DATABASE_URL_NOT_SET' };
   }
 
-  const p = initPool();
+  const p = inicializarPool();
   const inicio = Date.now();
   try {
     const client = await p.connect();
@@ -85,19 +74,13 @@ export async function checkPostgresHealth(): Promise<{ conectado: boolean; laten
   }
 }
 
-/**
- * Ejecuta una consulta individual usando el pool
- */
-export async function query<R extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<R>> {
-  const p = initPool();
+export async function ejecutarConsulta<R extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<R>> {
+  const p = inicializarPool();
   return p.query<R>(text, params);
 }
 
-/**
- * Ejecuta una función dentro de una transacción atómica PostgreSQL (BEGIN ... COMMIT / ROLLBACK)
- */
-export async function withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
-  const p = initPool();
+export async function ejecutarEnTransaccion<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+  const p = inicializarPool();
   const client = await p.connect();
   try {
     await client.query('BEGIN');
@@ -115,3 +98,12 @@ export async function withTransaction<T>(callback: (client: PoolClient) => Promi
     client.release();
   }
 }
+
+// Aliases para compatibilidad
+export const getPostgresConfig = obtenerConfiguracionPostgres;
+export const initPool = inicializarPool;
+export const closePool = cerrarPool;
+export const checkPostgresHealth = verificarSaludPostgres;
+export const query = ejecutarConsulta;
+export const withTransaction = ejecutarEnTransaccion;
+

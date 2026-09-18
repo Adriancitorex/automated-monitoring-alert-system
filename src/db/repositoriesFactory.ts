@@ -1,18 +1,3 @@
-/**
- * FÁBRICA DE REPOSITORIOS (PRODUCCIÓN POSTGRESQL VS DEMO MEMORIA)
- * 
- * Comportamiento estricto:
- * 1. Sin DATABASE_URL:
- *    -> Modo DEMO_MEMORY.
- * 2. Con DATABASE_URL:
- *    -> Modo POSTGRESQL.
- * 
- * REGLA DE ORO DE INFRAESTRUCTURA:
- * Si DATABASE_URL está configurada pero PostgreSQL falla o no está disponible,
- * QUEDA PROHIBIDO HACER FALLBACK SILENCIOSO A MEMORIA.
- * Debe arrojar error explícito de infraestructura (POSTGRESQL_UNAVAILABLE).
- */
-
 import { AppRepositories, OnboardingParams, OnboardingResult } from '../domain/repositories/interfaces';
 import {
   PostgresUsuarioRepository,
@@ -39,7 +24,7 @@ import {
   eliminarVehiculoPorPlacaMemoria,
   reiniciarDatosMemoria
 } from './memory/memoryRepositories';
-import { checkPostgresHealth, getPostgresConfig } from './postgres/pool';
+import { verificarSaludPostgres, obtenerConfiguracionPostgres } from './postgres/pool';
 import { seedDemoData } from './seeds/demoSeed';
 
 let singletonRepos: AppRepositories | null = null;
@@ -49,35 +34,34 @@ export async function obtenerEstadoConexion(): Promise<{
   detalles: string;
   error?: string;
 }> {
-  const { tieneConfiguracion } = getPostgresConfig();
+  const { tieneConfiguracion } = obtenerConfiguracionPostgres();
 
   if (!tieneConfiguracion) {
     return {
       estado: 'DEMO_MEMORY',
-      detalles: 'DATABASE_URL no configurada. Operando en memoria volátil para pruebas locales.'
+      detalles: 'DATABASE_URL no configurada. Operando en memoria volátil.'
     };
   }
 
-  const health = await checkPostgresHealth();
+  const health = await verificarSaludPostgres();
   if (health.conectado) {
     return {
       estado: 'POSTGRESQL_CONNECTED',
-      detalles: `PostgreSQL verificado con SELECT 1 (latencia: ${health.latenciaMs}ms)`
-    };
-  } else {
-    return {
-      estado: 'POSTGRESQL_UNAVAILABLE',
-      detalles: 'DATABASE_URL configurada pero PostgreSQL no responde o rechazó la conexión. Fallback a memoria BLOQUEADO.',
-      error: health.error
+      detalles: `PostgreSQL verificado con SELECT 1 (${health.latenciaMs}ms)`
     };
   }
+
+  return {
+    estado: 'POSTGRESQL_UNAVAILABLE',
+    detalles: 'DATABASE_URL configurada pero PostgreSQL no responde. Fallback a memoria bloqueado por consistencia.',
+    error: health.error
+  };
 }
 
 export async function inicializarRepositorios(): Promise<AppRepositories> {
-  const { tieneConfiguracion } = getPostgresConfig();
+  const { tieneConfiguracion } = obtenerConfiguracionPostgres();
 
   if (!tieneConfiguracion) {
-    // 1. MODO DEMO / MEMORIA
     seedDemoData(defaultMemoryStore);
 
     singletonRepos = {
@@ -100,25 +84,23 @@ export async function inicializarRepositorios(): Promise<AppRepositories> {
       },
       comprobarSalud: async () => ({
         estado: 'DEMO_MEMORY',
-        detalles: 'Operando con almacenamiento en memoria volátil.'
+        detalles: 'Almacenamiento en memoria volátil.'
       })
     };
 
     return singletonRepos;
   }
 
-  // 2. MODO PRODUCCIÓN POSTGRESQL
-  const health = await checkPostgresHealth();
+  const health = await verificarSaludPostgres();
 
   if (!health.conectado) {
-    const mensajeError = `ERROR DE INFRAESTRUCTURA CRÍTICO: DATABASE_URL está configurada pero la conexión falló: ${health.error}. Prohibido fallback silencioso a memoria.`;
-    console.error(mensajeError);
+    console.error(`Fallo de conexión a base de datos configurada: ${health.error}`);
 
-    // Creamos un adaptador que arroja error si se intenta cualquier operación
+    // Falla rápida para impedir corrupción de datos ante indisponibilidad de base de datos
     const failFastRepo: any = new Proxy({}, {
       get() {
         return () => {
-          throw new Error('POSTGRESQL_UNAVAILABLE: Base de datos configurada no disponible. Operación abortada.');
+          throw new Error('POSTGRESQL_UNAVAILABLE: Base de datos configurada no disponible.');
         };
       }
     });
@@ -133,13 +115,13 @@ export async function inicializarRepositorios(): Promise<AppRepositories> {
       notificaciones: failFastRepo,
       auditoria: failFastRepo,
       ejecutarOnboardingTransaccional: async () => {
-        throw new Error('POSTGRESQL_UNAVAILABLE: No se puede registrar vehículos mientras PostgreSQL no esté disponible.');
+        throw new Error('POSTGRESQL_UNAVAILABLE: Operación suspendida por indisponibilidad de base de datos.');
       },
       eliminarVehiculoPorPlaca: async () => {
-        throw new Error('POSTGRESQL_UNAVAILABLE: No se puede eliminar vehículos mientras PostgreSQL no esté disponible.');
+        throw new Error('POSTGRESQL_UNAVAILABLE: Operación suspendida por indisponibilidad de base de datos.');
       },
       reiniciarDatosDemo: async () => {
-        throw new Error('POSTGRESQL_UNAVAILABLE: No se pueden reiniciar datos mientras PostgreSQL no esté disponible.');
+        throw new Error('POSTGRESQL_UNAVAILABLE: Operación suspendida por indisponibilidad de base de datos.');
       },
       comprobarSalud: async () => ({
         estado: 'POSTGRESQL_UNAVAILABLE',
@@ -169,7 +151,7 @@ export async function inicializarRepositorios(): Promise<AppRepositories> {
       return reiniciarDatosPostgres();
     },
     comprobarSalud: async () => {
-      const h = await checkPostgresHealth();
+      const h = await verificarSaludPostgres();
       return {
         estado: h.conectado ? 'POSTGRESQL_CONNECTED' : 'POSTGRESQL_UNAVAILABLE',
         detalles: h.conectado ? `SELECT 1 exitoso (${h.latenciaMs}ms)` : (h.error || 'Error desconocido')
@@ -180,9 +162,12 @@ export async function inicializarRepositorios(): Promise<AppRepositories> {
   return singletonRepos;
 }
 
-export async function getRepositories(): Promise<AppRepositories> {
+export async function obtenerRepositorios(): Promise<AppRepositories> {
   if (!singletonRepos) {
     return inicializarRepositorios();
   }
   return singletonRepos;
 }
+
+// Alias para compatibilidad
+export const getRepositories = obtenerRepositorios;

@@ -1,16 +1,5 @@
-/**
- * TESTS DE INTEGRACIÓN REALES CONTRA POSTGRESQL - AVISAMULTAS JALISCO
- * 
- * Verifica las tablas reales, llaves foráneas, restricciones de unicidad compuestas,
- * tipos NUMERIC y rollback en transacciones.
- * 
- * REGLA ESTRICTA:
- * Si DATABASE_URL no está configurada o PostgreSQL no está disponible,
- * esta suite se marca como OMITIDA (SKIPPED), NUNCA como exitosa.
- */
-
 import dotenv from 'dotenv';
-import { checkPostgresHealth, initPool, closePool, withTransaction } from '../db/postgres/pool';
+import { verificarSaludPostgres, inicializarPool, cerrarPool, withTransaction } from '../db/postgres/pool';
 import {
   PostgresUsuarioRepository,
   PostgresVehiculoRepository,
@@ -32,42 +21,42 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-export async function runPostgresIntegrationTests(): Promise<{
+export async function ejecutarTestsPostgres(): Promise<{
   omitido: boolean;
   motivoOmision?: string;
   pasados: number;
   fallados: number;
   detalles: string[];
 }> {
-  console.log('\n--- EJECUTANDO TESTS DE INTEGRACIÓN (POSTGRESQL REAL) ---');
+  console.log('[test] Ejecutando suite de integración (PostgreSQL)');
 
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl || databaseUrl.trim() === '') {
-    const mensaje = 'DATABASE_URL no está configurada en las variables de entorno.';
-    console.log(`⚠️  [OMITIDO / SKIPPED] ${mensaje}`);
+    const mensaje = 'DATABASE_URL no configurada en el entorno.';
+    console.log(`[test] [OMITIDO] ${mensaje}`);
     return {
       omitido: true,
       motivoOmision: mensaje,
       pasados: 0,
       fallados: 0,
-      detalles: [`⚠️  [POSTGRESQL OMITIDO] ${mensaje}`]
+      detalles: [`[OMITIDO] ${mensaje}`]
     };
   }
 
-  const health = await checkPostgresHealth();
+  const health = await verificarSaludPostgres();
   if (!health.conectado) {
-    const mensaje = `DATABASE_URL está configurada pero PostgreSQL no está accesible: ${health.error}`;
-    console.log(`⚠️  [OMITIDO / SKIPPED] ${mensaje}`);
+    const mensaje = `DATABASE_URL configurada pero PostgreSQL inaccesible: ${health.error}`;
+    console.log(`[test] [OMITIDO] ${mensaje}`);
     return {
       omitido: true,
       motivoOmision: mensaje,
       pasados: 0,
       fallados: 0,
-      detalles: [`⚠️  [POSTGRESQL OMITIDO] ${mensaje}`]
+      detalles: [`[OMITIDO] ${mensaje}`]
     };
   }
 
-  console.log(`✅ Conexión establecida con PostgreSQL (${health.latenciaMs}ms). Ejecutando suite de integración...`);
+  console.log(`[test] Conexión PostgreSQL establecida (${health.latenciaMs}ms).`);
 
   const detalles: string[] = [];
   let pasados = 0;
@@ -77,10 +66,10 @@ export async function runPostgresIntegrationTests(): Promise<{
     try {
       await fn();
       pasados++;
-      detalles.push(`  ✅ [PG] ${nombre}`);
+      detalles.push(`  PASS [pg] ${nombre}`);
     } catch (err: any) {
       fallados++;
-      detalles.push(`  ❌ [PG] ${nombre} -> ${err.message}`);
+      detalles.push(`  FAIL [pg] ${nombre} -> ${err.message}`);
     }
   }
 
@@ -285,7 +274,6 @@ export async function runPostgresIntegrationTests(): Promise<{
       assert(vehiculoNoCreado === null, 'El vehículo NO debe existir debido al ROLLBACK');
     });
 
-    // 12. Eliminar vehículo y sus dependencias en PostgreSQL respetando integridad referencial
     await test('Eliminar vehículo y sus registros relacionados en PostgreSQL', async () => {
       const vehRepo = new PostgresVehiculoRepository();
       const vehiculoAntes = await vehRepo.obtenerPorPlaca(placaTest);
@@ -298,9 +286,8 @@ export async function runPostgresIntegrationTests(): Promise<{
       assert(vehiculoDespues === null, 'El vehículo debe haber sido eliminado de la base de datos');
     });
 
-    // 13. Seguridad: RLS activado en las 7 tablas y bloqueo de acceso público (anon/authenticated)
     await test('RLS activo en las 7 tablas y bloqueo de rol público anon', async () => {
-      const pool = initPool();
+      const pool = inicializarPool();
       const client = await pool.connect();
       try {
         const tablas = ['usuarios', 'vehiculos', 'suscripciones', 'infracciones', 'revisiones', 'notificaciones', 'auditoria'];
@@ -312,10 +299,9 @@ export async function runPostgresIntegrationTests(): Promise<{
 
         for (const t of tablas) {
           const row = rlsRes.rows.find((r) => r.tablename === t);
-          assert(Boolean(row && row.rowsecurity === true), `La tabla ${t} DEBE tener rowsecurity (RLS) = true`);
+          assert(Boolean(row && row.rowsecurity === true), `La tabla ${t} debe tener rowsecurity (RLS) = true`);
         }
 
-        // Comprobar si existe el rol anon en la base de datos para validar bloqueo estricto
         const roleRes = await client.query("SELECT 1 FROM pg_roles WHERE rolname = 'anon'");
         if (roleRes.rows.length > 0) {
           for (const t of tablas) {
@@ -329,7 +315,7 @@ export async function runPostgresIntegrationTests(): Promise<{
               await client.query('ROLLBACK;');
               bloqueado = true;
             }
-            assert(bloqueado, `El rol público 'anon' DEBE tener acceso denegado a la tabla ${t}`);
+            assert(bloqueado, `El rol público anon debe tener acceso denegado a la tabla ${t}`);
           }
         }
       } finally {
@@ -337,16 +323,18 @@ export async function runPostgresIntegrationTests(): Promise<{
       }
     });
   } finally {
-    await closePool();
+    await cerrarPool();
   }
 
   console.log(detalles.join('\n'));
-  console.log(`\nResumen Tests PostgreSQL: ${pasados} Pasados, ${fallados} Fallados`);
+  console.log(`\nResumen Tests PostgreSQL: ${pasados} pasados, ${fallados} fallados`);
   return { omitido: false, pasados, fallados, detalles };
 }
 
+export const runPostgresIntegrationTests = ejecutarTestsPostgres;
+
 if (process.argv[1]?.endsWith('postgresIntegration.test.ts')) {
-  runPostgresIntegrationTests()
+  ejecutarTestsPostgres()
     .then((r) => {
       if (r.fallados > 0) process.exit(1);
     })

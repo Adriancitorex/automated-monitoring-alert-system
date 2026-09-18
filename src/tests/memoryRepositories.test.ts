@@ -1,9 +1,3 @@
-/**
- * SUITE DE TESTS UNITARIOS - REPOSITORIOS EN MEMORIA
- * 
- * Verifica la lógica de negocio, deduplicación, claves foráneas y rollback atómico.
- */
-
 import { MemoryStore, defaultMemoryStore, MemoryUsuarioRepository, MemoryVehiculoRepository, MemorySuscripcionRepository, MemoryInfraccionRepository, MemoryRevisionRepository, MemoryNotificacionRepository, MemoryAuditoriaRepository, ejecutarOnboardingTransaccionalMemoria, eliminarVehiculoPorPlacaMemoria, reiniciarDatosMemoria } from '../db/memory/memoryRepositories';
 import { InfraccionCanonica } from '../domain/types';
 
@@ -13,7 +7,7 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-export async function runMemoryTests(): Promise<{ pasados: number; fallados: number; detalles: string[] }> {
+export async function ejecutarTestsMemoria(): Promise<{ pasados: number; fallados: number; detalles: string[] }> {
   const store = new MemoryStore();
   const detalles: string[] = [];
   let pasados = 0;
@@ -23,16 +17,15 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     try {
       await fn();
       pasados++;
-      detalles.push(`  ✅ [MEMORIA] ${nombre}`);
+      detalles.push(`  PASS [memoria] ${nombre}`);
     } catch (err: any) {
       fallados++;
-      detalles.push(`  ❌ [MEMORIA] ${nombre} -> ${err.message}`);
+      detalles.push(`  FAIL [memoria] ${nombre} -> ${err.message}`);
     }
   }
 
-  console.log('\n--- EJECUTANDO TESTS UNITARIOS (REPOSITORIOS EN MEMORIA) ---');
+  console.log('[test] Ejecutando suite unitaria (memoria)');
 
-  // 1. Crear usuario
   await test('Crear usuario con validación de email', async () => {
     const userRepo = new MemoryUsuarioRepository(store);
     const u = await userRepo.crear({
@@ -44,8 +37,7 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(u.email === 'juan.perez@example.com', 'El email debe coincidir');
   });
 
-  // 2. FK Usuario -> Vehículo (Fallo si usuario no existe)
-  await test('FK usuario -> vehículo (debe rechazar si usuario no existe)', async () => {
+  await test('FK usuario -> vehículo (rechazar si usuario no existe)', async () => {
     const vehRepo = new MemoryVehiculoRepository(store);
     let errorCapturado = false;
     try {
@@ -65,7 +57,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(errorCapturado, 'Debió fallar por FK inexistente');
   });
 
-  // 3. Crear vehículo válido
   let usuarioIdValido = '';
   let vehiculoIdValido = '';
   await test('Crear vehículo vinculado a usuario existente', async () => {
@@ -91,7 +82,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(v.placa === 'JAL5555', 'La placa debe guardarse normalizada');
   });
 
-  // 4. Crear suscripción y validar estado PENDIENTE_PAGO
   await test('Crear suscripción en estado PENDIENTE_PAGO', async () => {
     const subRepo = new MemorySuscripcionRepository(store);
     const s = await subRepo.crear({
@@ -106,7 +96,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(s.montoMxn === 99.00, 'El monto debe mantener precisión');
   });
 
-  // 5. Insertar infracción canónica
   const infraccionDemo: InfraccionCanonica = {
     idInterno: 'mul-test-01',
     vehiculoId: vehiculoIdValido,
@@ -136,7 +125,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(creada.fuenteIdentificador === 'JALISCO_SHP_FOLIO', 'Debe almacenar el namespace');
   });
 
-  // 6. Impedir duplicado por identificador (fuente + folio)
   await test('Impedir duplicado por identificador oficial unívoco', async () => {
     const infRepo = new MemoryInfraccionRepository(store);
     let duplicadoRechazado = false;
@@ -152,7 +140,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(duplicadoRechazado, 'Debió rechazar el duplicado de folio');
   });
 
-  // 7. Impedir duplicado por hecho material (misma fecha, vehículo y concepto)
   await test('Impedir duplicado por hecho material', async () => {
     const infRepo = new MemoryInfraccionRepository(store);
     let duplicadoMaterial = false;
@@ -160,7 +147,7 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
       await infRepo.crear({
         ...infraccionDemo,
         idInterno: 'mul-test-03',
-        identificadorExterno: 'FOLIO-DISTINTO-999' // Folio distinto, pero mismo hecho material
+        identificadorExterno: 'FOLIO-DISTINTO-999'
       });
     } catch (e: any) {
       duplicadoMaterial = true;
@@ -169,7 +156,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(duplicadoMaterial, 'Debió rechazar el duplicado por hecho material');
   });
 
-  // 8. Registrar revisión de vehículo
   await test('Registrar revisión en bitácora', async () => {
     const revRepo = new MemoryRevisionRepository(store);
     const rev = await revRepo.crear({
@@ -181,7 +167,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(rev.resultado === 'SIN_INFRACCIONES', 'El resultado debe registrarse');
   });
 
-  // 9. Registrar notificación
   await test('Registrar notificación enviada', async () => {
     const notifRepo = new MemoryNotificacionRepository(store);
     const notif = await notifRepo.crear({
@@ -197,7 +182,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(notif.estado === 'ENVIADO', 'Estado debe ser ENVIADO');
   });
 
-  // 10. Registrar auditoría
   await test('Registrar evento de auditoría inmutable', async () => {
     const audRepo = new MemoryAuditoriaRepository(store);
     const aud = await audRepo.registrar({
@@ -208,13 +192,11 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(aud.tipo === 'INFRACCION_DETECTADA', 'Tipo de auditoría debe coincidir');
   });
 
-  // 11. Rollback de una transacción (Onboarding atómico revierte todo si falla)
   await test('Rollback transaccional de Onboarding ante error en proceso', async () => {
     const totalUsuariosAntes = store.usuarios.length;
     const totalVehiculosAntes = store.vehiculos.length;
     const totalSuscripcionesAntes = store.suscripciones.length;
 
-    // Intentamos un onboarding con placa ya existente (debe abortar y revertir el usuario creado)
     let falloEsperado = false;
     try {
       await ejecutarOnboardingTransaccionalMemoria(
@@ -222,7 +204,7 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
           nombre: 'Cliente Abortado',
           email: 'abortado@example.com',
           telefonoWhatsApp: '+523300000000',
-          placa: 'JAL5555', // Ya existe, lanzará error
+          placa: 'JAL5555',
           numeroSerie5: '11111'
         },
         store
@@ -237,8 +219,7 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(store.suscripciones.length === totalSuscripcionesAntes, 'El número de suscripciones no debe alterarse');
   });
 
-  // 12. Eliminar vehículo y sus dependencias en memoria
-  await test('Eliminar vehículo por placa y limpiar registros vinculados', async () => {
+  await test('Eliminar vehículo por placa y dependencias asociadas', async () => {
     const vehRepo = new MemoryVehiculoRepository(store);
     const v = await vehRepo.obtenerPorPlaca('JAL5555');
     assert(Boolean(v), 'El vehículo JAL5555 debe existir');
@@ -248,7 +229,6 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
     assert(postDel === null, 'El vehículo JAL5555 ya no debe existir');
   });
 
-  // 13. Reinicio de datos demo en memoria
   await test('Reinicio de datos demo en memoria', async () => {
     reiniciarDatosMemoria(store);
     assert(store.vehiculos.length > 0, 'Deben existir vehículos sembrados tras el reset');
@@ -256,12 +236,14 @@ export async function runMemoryTests(): Promise<{ pasados: number; fallados: num
   });
 
   console.log(detalles.join('\n'));
-  console.log(`\nResumen Tests Memoria: ${pasados} Pasados, ${fallados} Fallados`);
+  console.log(`\nResumen Tests Memoria: ${pasados} pasados, ${fallados} fallados`);
   return { pasados, fallados, detalles };
 }
 
+export const runMemoryTests = ejecutarTestsMemoria;
+
 if (process.argv[1]?.endsWith('memoryRepositories.test.ts')) {
-  runMemoryTests()
+  ejecutarTestsMemoria()
     .then((r) => {
       if (r.fallados > 0) process.exit(1);
     })
