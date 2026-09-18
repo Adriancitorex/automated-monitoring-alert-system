@@ -1,0 +1,6 @@
+{
+  "name": "AvisaMultas Jalisco",
+  "description": "Servicio de monitoreo vehicular y alertas preventivas de fotomultas en Jalisco por WhatsApp bajo mandato expreso.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
