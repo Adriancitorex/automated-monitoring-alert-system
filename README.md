@@ -6,7 +6,7 @@ Designed as a modular, production-ready blueprint, this system automates schedul
 
 ---
 
-## 🌟 Key Architecture & Capabilities
+## Key Architecture & Capabilities
 
 - **Dual-Storage Engine Architecture**:
   - **Managed PostgreSQL**: Native transactional pool (`pg`) with ACID compliance, relational integrity (`FOREIGN KEY`, `UNIQUE`, `ON DELETE RESTRICT`), and Row-Level Security (RLS).
@@ -26,7 +26,7 @@ Designed as a modular, production-ready blueprint, this system automates schedul
 
 ---
 
-## 📐 Adaptable Use Cases
+## Adaptable Use Cases
 
 While initially configured for vehicle citation monitoring and prompt-payment discount alerts under user mandate, this architecture readily adapts to:
 
@@ -37,7 +37,7 @@ While initially configured for vehicle citation monitoring and prompt-payment di
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -91,7 +91,7 @@ While initially configured for vehicle citation monitoring and prompt-payment di
 
 ---
 
-## 🧪 Testing & Verification
+## Testing & Verification
 
 The project includes an end-to-end test suite testing both the in-memory store and real PostgreSQL instances:
 
@@ -106,7 +106,7 @@ npm test
 
 ---
 
-## 🔒 Security & Privacy
+## Security & Privacy
 
 - **Row-Level Security (RLS)**: Enforced across all core tables to prevent unauthorized client-side access.
 - **Zero Hardcoded Secrets**: All authentication keys, connection strings, and tokens are read strictly from runtime environment variables.
@@ -114,6 +114,6 @@ npm test
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

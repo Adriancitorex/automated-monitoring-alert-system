@@ -27,7 +27,7 @@ La aplicación implementa un patrón de Repositorio desacoplado mediante una Fá
 
 ## 2. Regla de Oro: Prohibición de Fallback Silencioso
 
-> ⚠️ **REGLA CRÍTICA DE INFRAESTRUCTURA:**
+> **REGLA CRÍTICA DE INFRAESTRUCTURA:**
 > Si `DATABASE_URL` existe pero la base de datos PostgreSQL no responde, rechaza la conexión o falla el `SELECT 1`, **EL SISTEMA TIENE ESTRICTAMENTE PROHIBIDO HACER UN FALLBACK A MEMORIA**.
 
 ### Justificación:

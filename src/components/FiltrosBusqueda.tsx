@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, ShieldCheck, Car, CreditCard, RotateCcw } from 'lucide-react';
+import { Search, Filter, ShieldCheck, Car, CreditCard, RotateCcw, X } from 'lucide-react';
 
 interface FiltrosBusquedaProps {
   busqueda: string;
@@ -38,7 +38,7 @@ export const FiltrosBusqueda: React.FC<FiltrosBusquedaProps> = ({
               onClick={() => onBusquedaChange('')}
               className="absolute right-3 top-3 text-xs text-slate-400 hover:text-slate-600 bg-slate-200 rounded-full w-5 h-5 flex items-center justify-center"
             >
-              ✕
+              <X className="w-3 h-3" />
             </button>
           )}
         </div>

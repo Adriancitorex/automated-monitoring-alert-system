@@ -119,7 +119,7 @@ El proyecto cuenta con dos suites de pruebas separadas:
 ```bash
 npm run test:postgres
 ```
-- **Sin `DATABASE_URL`:** La suite se marca como `⚠️ [OMITIDO / SKIPPED]` (no genera falsos positivos).
+- **Sin `DATABASE_URL`:** La suite se marca como `[OMITIDO / SKIPPED]` (no genera falsos positivos).
 - **Con `DATABASE_URL`:** Se conecta a PostgreSQL y valida:
   1. Inserción de usuarios con email único.
   2. Cumplimiento de Foreign Keys (`ON DELETE RESTRICT`).
@@ -145,7 +145,7 @@ Durante el ciclo de desarrollo o pruebas, si deseas resetear el esquema a un est
 ### Opción A: Mediante CLI `psql`
 Conéctate a tu base de datos y ejecuta:
 ```sql
--- ⚠️ SOLO EN AMBIENTES DE DESARROLLO / TEST
+-- SOLO EN AMBIENTES DE DESARROLLO / TEST
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO public;
